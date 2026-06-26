@@ -8,6 +8,12 @@
 <script src="https://cdn.jsdelivr.net/npm/marked-gfm-heading-id/lib/index.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"></script>
 <link id="hljs-theme" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+<!-- math -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/marked-katex-extension/lib/index.umd.js"></script>
+<!-- diagrams -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <style>
   :root {
     --bg: #f6f7f9;
@@ -49,8 +55,19 @@
   }
   button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
   button:hover { filter: brightness(0.97); }
-  label.file { display: inline-flex; }
   input[type=file] { display: none; }
+  input[type=text] {
+    font: inherit; font-size: 13px; border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 10px; color: var(--text);
+  }
+
+  /* ---- cover settings row ---- */
+  #cover-bar {
+    flex: 0 0 auto; display: none; gap: 10px; align-items: center; flex-wrap: wrap;
+    padding: 8px 16px; background: #fafbfc; border-bottom: 1px solid var(--border);
+  }
+  #cover-bar.show { display: flex; }
+  #cover-bar input[type=text] { flex: 1; min-width: 140px; }
 
   /* ---- Editor / Preview split ---- */
   main { flex: 1; display: flex; min-height: 0; }
@@ -68,8 +85,17 @@
   }
   #preview-wrap { flex: 1; overflow: auto; background: #fff; }
 
-  /* drag-over highlight */
   body.dragover #editor { background: #eef4ff; }
+
+  /* ---- cover page ---- */
+  #cover {
+    display: none; flex-direction: column; justify-content: center; align-items: center;
+    text-align: center; min-height: 70vh; padding: 48px 56px; max-width: 760px; margin: 0 auto;
+  }
+  #cover.show { display: flex; }
+  #cover .c-title { font-size: 2.4em; font-weight: 700; line-height: 1.2; margin-bottom: .4em; }
+  #cover .c-author { font-size: 1.2em; color: var(--muted); margin-bottom: .2em; }
+  #cover .c-date { font-size: 1em; color: var(--muted); }
 
   /* ---- Rendered markdown ('paper') ---- */
   .paper {
@@ -97,18 +123,19 @@
   .paper img { max-width: 100%; }
   .paper a { color: var(--accent); }
   .paper hr { border: 0; border-top: 1px solid var(--border); margin: 2em 0; }
+  .paper .mermaid { text-align: center; margin: 1em 0; }
 
-  /* serif option */
   .paper.serif { font-family: Georgia, "Songti SC", "SimSun", serif; }
 
-  /* ---- Print: only the paper, sized to the page ---- */
+  /* ---- Print ---- */
   @media print {
     @page { margin: var(--page-margin, 18mm); }
-    header, main > .pane:first-child, .pane-label { display: none !important; }
+    header, #cover-bar, main > .pane:first-child, .pane-label { display: none !important; }
     body, main, .pane, #preview-wrap { display: block !important; overflow: visible !important; height: auto !important; }
     .pane + .pane { border: 0; }
     .paper { max-width: none; margin: 0; padding: 0; font-size: 11.5pt; }
-    .paper pre, .paper blockquote, .paper table, .paper img { break-inside: avoid; }
+    #cover.show { display: flex !important; min-height: 92vh; break-after: page; max-width: none; padding: 0; }
+    .paper pre, .paper blockquote, .paper table, .paper img, .paper .mermaid { break-inside: avoid; }
     .paper h1, .paper h2, .paper h3 { break-after: avoid; }
     a { color: inherit; text-decoration: none; }
   }
@@ -118,12 +145,11 @@
 <header>
   <h1>Markdown → PDF</h1>
   <div class="ctrl">
-    <label class="file">
-      <button type="button" onclick="this.parentNode.querySelector('input').click()">打开 .md</button>
-      <input type="file" accept=".md,.markdown,.txt,text/markdown" onchange="loadFile(this.files[0])">
-    </label>
+    <button type="button" onclick="document.getElementById('fileInput').click()">打开 .md</button>
+    <input id="fileInput" type="file" accept=".md,.markdown,.txt,text/markdown" onchange="loadFile(this.files[0])">
   </div>
   <div class="spacer"></div>
+  <label class="ctrl"><input type="checkbox" id="coverToggle" onchange="toggleCover()"> 封面页</label>
   <div class="ctrl">字体
     <select id="font" onchange="applyOpts()">
       <option value="">无衬线(默认)</option>
@@ -146,6 +172,12 @@
   <button class="primary" onclick="window.print()">导出 PDF</button>
 </header>
 
+<div id="cover-bar">
+  <input type="text" id="cTitle"  placeholder="标题"   oninput="render()">
+  <input type="text" id="cAuthor" placeholder="作者"   oninput="render()">
+  <input type="text" id="cDate"   placeholder="日期 / 副标题" oninput="render()">
+</div>
+
 <main>
   <div class="pane">
     <div class="pane-label">Markdown 源</div>
@@ -153,15 +185,21 @@
   </div>
   <div class="pane">
     <div class="pane-label">预览(导出时按此排版)</div>
-    <div id="preview-wrap"><div class="paper" id="preview"></div></div>
+    <div id="preview-wrap">
+      <div id="cover"><div class="c-title"></div><div class="c-author"></div><div class="c-date"></div></div>
+      <div class="paper" id="preview"></div>
+    </div>
   </div>
 </main>
 
 <script>
+  // marked plugins
   marked.use(markedGfmHeadingId.gfmHeadingId());
+  if (window.markedKatex) marked.use(markedKatex({ throwOnError: false, nonStandard: true }));
   marked.setOptions({
     gfm: true, breaks: false,
     highlight: (code, lang) => {
+      if (lang === 'mermaid') return code;           // leave for mermaid pass
       try {
         return lang && hljs.getLanguage(lang)
           ? hljs.highlight(code, { language: lang }).value
@@ -169,11 +207,41 @@
       } catch (e) { return code; }
     }
   });
+  mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose' });
 
-  const editor = document.getElementById('editor');
+  const editor  = document.getElementById('editor');
   const preview = document.getElementById('preview');
+  const cover   = document.getElementById('cover');
+  let mermaidSeq = 0;
 
-  function render() { preview.innerHTML = marked.parse(editor.value || ''); }
+  function render() {
+    let html = marked.parse(editor.value || '');
+    // turn ```mermaid blocks into <div class="mermaid">
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    tmp.querySelectorAll('pre > code.language-mermaid').forEach(code => {
+      const div = document.createElement('div');
+      div.className = 'mermaid';
+      div.textContent = code.textContent;
+      code.parentElement.replaceWith(div);
+    });
+    preview.innerHTML = tmp.innerHTML;
+    const nodes = preview.querySelectorAll('.mermaid');
+    if (nodes.length) {
+      nodes.forEach(n => n.removeAttribute('data-processed'));
+      try { mermaid.run({ nodes, suppressErrors: true }); } catch (e) {}
+    }
+    // cover
+    cover.querySelector('.c-title').textContent  = document.getElementById('cTitle').value;
+    cover.querySelector('.c-author').textContent = document.getElementById('cAuthor').value;
+    cover.querySelector('.c-date').textContent   = document.getElementById('cDate').value;
+  }
+
+  function toggleCover() {
+    const on = document.getElementById('coverToggle').checked;
+    document.getElementById('cover-bar').classList.toggle('show', on);
+    cover.classList.toggle('show', on);
+  }
   function applyOpts() {
     preview.classList.toggle('serif', document.getElementById('font').value === 'serif');
     document.documentElement.style.setProperty('--page-margin', document.getElementById('margin').value);
@@ -191,7 +259,6 @@
 
   editor.addEventListener('input', render);
 
-  // drag & drop a file anywhere
   ['dragenter','dragover'].forEach(e => document.body.addEventListener(e, ev => {
     ev.preventDefault(); document.body.classList.add('dragover');
   }));
@@ -206,26 +273,30 @@
   // demo content
   editor.value = `# Markdown → PDF
 
-把左边的内容替换成你的，右边实时预览，点 **导出 PDF** 即可。
+实时预览,点 **导出 PDF**。新增:数学公式、流程图、封面页。
 
-## 支持
+## 数学公式 (KaTeX)
 
-- GitHub 风格 Markdown（表格、任务列表、删除线）
-- 代码高亮
-- 中文字体清晰、文字可选中（矢量，非截图）
+行内 $E = mc^2$,块级:
+
+$$\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}$$
+
+## 流程图 (Mermaid)
+
+\`\`\`mermaid
+flowchart LR
+  A[写 Markdown] --> B{预览}
+  B --> C[导出 PDF]
+\`\`\`
+
+## 代码
 
 \`\`\`python
 def hello(name):
     return f"你好, {name}"
 \`\`\`
 
-| 功能 | 状态 |
-|------|------|
-| 拖拽打开 | ✅ |
-| 实时预览 | ✅ |
-| 一键导出 | ✅ |
-
-> 导出时：在打印对话框里选「另存为 PDF」，关闭「页眉和页脚」即可得到干净的 PDF。
+> 勾选右上角「封面页」可加标题页。导出时在打印对话框选「另存为 PDF」,需要页码就开启「页眉和页脚」。
 `;
   applyOpts();
   render();
